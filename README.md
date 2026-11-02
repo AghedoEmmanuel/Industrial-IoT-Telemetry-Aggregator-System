@@ -17,8 +17,8 @@ For a detailed breakdown of the data flow and sequence diagrams, see the [System
 
 - [x] **Step 1: System Architecture Design** *(Completed)*
   - Documented ingestion flow, edge proxying, Redis caching justification, and PostgreSQL partitioning strategy in `system-design.md`.
-- [ ] **Step 2: Database Schema and Partitioning** *(In Progress)*
-  - Write SQL initialization script (`db/init.sql`) for `telemetry_raw` parent table, time-series partition bounds, and performance indices.
+- [x] **Step 2: Database Schema and Partitioning** *(Completed)*
+  - Added the `telemetry_raw` parent table, timestamp indexes, and a procedure for maintaining daily UTC partitions in `db/init.sql`.
 - [ ] **Step 3: Data Ingestion Service**
   - Build the ingestion API to process incoming sensor payloads, write to Redis, and batch-flush to PostgreSQL.
 - [ ] **Step 4: Load Balancing Setup**
