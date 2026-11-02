@@ -26,7 +26,7 @@ sequenceDiagram
     Nginx - >> Ingest: Forward load balance request
     Ingest ->> Redis: SETEX current_sensor_state (Update current sensor state (Cache write))
     Ingest ->> Ingest: Accumulate telemetry in memory batch queue
-    Note over Ingest, PG: Batch flush triggered (every 1000 input)
+    #Note over Ingest, PG: Batch flush triggered (every 1000 input)
     Ingest ->> PostgreSql: Batch insert time-series records
 ```
 
