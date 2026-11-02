@@ -12,6 +12,58 @@ CREATE INDEX IF NOT EXISTS idx_telemetry_sensor_time
 CREATE INDEX IF NOT EXISTS idx_telemetry_recorded_at
     ON telemetry_raw (recorded_at);
 
+-- Keep an idempotency receipt after queue processing so client retries cannot
+-- enqueue the same reading again.
+CREATE TABLE IF NOT EXISTS telemetry_ingest_receipts (
+    idempotency_key UUID PRIMARY KEY,
+    sensor_id VARCHAR(64) NOT NULL,
+    recorded_at TIMESTAMPTZ NOT NULL,
+    value DOUBLE PRECISION NOT NULL,
+    received_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
+);
+
+-- Workers claim due rows with a lease; expired leases are eligible for reclaim.
+CREATE TABLE IF NOT EXISTS telemetry_ingest_queue (
+    idempotency_key UUID PRIMARY KEY
+        REFERENCES telemetry_ingest_receipts (idempotency_key),
+    attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+    next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
+    lease_token UUID,
+    lease_expires_at TIMESTAMPTZ,
+    last_error TEXT,
+    CHECK ((lease_token IS NULL) = (lease_expires_at IS NULL))
+);
+
+CREATE INDEX IF NOT EXISTS idx_telemetry_ingest_queue_due
+    ON telemetry_ingest_queue (next_attempt_at);
+
+-- The cache outbox is written in the same transaction that stores raw data.
+CREATE TABLE IF NOT EXISTS telemetry_cache_outbox (
+    idempotency_key UUID PRIMARY KEY
+        REFERENCES telemetry_ingest_receipts (idempotency_key),
+    attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+    next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
+    lease_token UUID,
+    lease_expires_at TIMESTAMPTZ,
+    last_error TEXT,
+    CHECK ((lease_token IS NULL) = (lease_expires_at IS NULL))
+);
+
+CREATE INDEX IF NOT EXISTS idx_telemetry_cache_outbox_due
+    ON telemetry_cache_outbox (next_attempt_at);
+
+-- Failed work is retained for inspection and manual replay instead of discarded.
+CREATE TABLE IF NOT EXISTS telemetry_dead_letters (
+    idempotency_key UUID NOT NULL
+        REFERENCES telemetry_ingest_receipts (idempotency_key),
+    failure_stage TEXT NOT NULL
+        CHECK (failure_stage IN ('postgres', 'redis')),
+    attempt_count INTEGER NOT NULL CHECK (attempt_count > 0),
+    last_error TEXT NOT NULL,
+    failed_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
+    PRIMARY KEY (idempotency_key, failure_stage)
+);
+
 CREATE OR REPLACE PROCEDURE maintain_telemetry_partitions(
     days_in_past INT,
     days_in_future INT
