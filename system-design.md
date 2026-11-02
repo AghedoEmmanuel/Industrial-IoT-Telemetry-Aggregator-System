@@ -33,14 +33,21 @@ sequenceDiagram
 
 # document the time-based table partitioning schema and index maintenance strategy here
 A. Database Partitioning Strategy (PostgreSQL)
+    
     * Partitioning Schema: We implement declarative range partitioning on the main telemetry table using the timestamp column, broken down into physical daily or weekly child tables (e.g.,telemetry_yymmdd).
+    
     * Performance Impact:
+        
         * Compact Indexes: B-tree indexes remain small and fit entirely within RAM memory, ensuring fast reads.
+        
         * Partition Pruning: Queries specifying a time range automatically skip scanning irrelevant child tables, radically reducing query execution times for historical chart trends.
+        
         * Retention & Archival: Old data can be dropped or archived instantly via DROP TABLE without causing expensive table-locking row deletions.
 
 B. Caching Layer & Eviction Policy (Redis)
-    *Purpose: Serves real-time client dashboard requests with sub-millisecond latency for live tracking widgets.
+    
+    * Purpose: Serves real-time client dashboard requests with sub-millisecond latency for live tracking widgets.
+    
     * Eviction Policy: We utilize an allkeys-lru(last recently used) eviction policy. When redis reaches its maximum allocated memory capacity. it automatically evicts the stale telemetry states of sensors that haven't transmitted data recently, ensuring the cache stays bounded and healthy without manual intervention.
 
 ## 4. Edge Proxy and Caching Interaction
