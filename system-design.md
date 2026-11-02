@@ -21,13 +21,12 @@ sequenceDiagram
     participant Redis as Redis Caching Layer
     participant PG as PostgreSQL Partitioned DB
 
-    # add sensor data emission, caching write, and batch flush logic here
-    sensor ->> Nginx: POST/telemetry (High-frequency data)
-    Nginx - >> Ingest: Forward load balance request
-    Ingest ->> Redis: SETEX current_sensor_state (Update current sensor state (Cache write))
+    Sensor ->> Nginx: POST /telemetry (high-frequency data)
+    Nginx ->> Ingest: Forward load-balanced request
+    Ingest ->> Redis: SETEX current_sensor_state (update current sensor state)
     Ingest ->> Ingest: Accumulate telemetry in memory batch queue
-    #Note over Ingest, PG: Batch flush triggered (every 1000 input)
-    Ingest ->> PostgreSql: Batch insert time-series records
+    Note over Ingest, PG: Batch flush triggered every 1000 records
+    Ingest ->> PG: Batch insert time-series records
 ```
 
 ## 3. Database Partitioning Strategy
@@ -39,6 +38,7 @@ A. Database Partitioning Strategy (PostgreSQL)
         * Compact Indexes: B-tree indexes remain small and fit entirely within RAM memory, ensuring fast reads.
         * Partition Pruning: Queries specifying a time range automatically skip scanning irrelevant child tables, radically reducing query execution times for historical chart trends.
         * Retention & Archival: Old data can be dropped or archived instantly via DROP TABLE without causing expensive table-locking row deletions.
+
 B. Caching Layer & Eviction Policy (Redis)
     *Purpose: Serves real-time client dashboard requests with sub-millisecond latency for live tracking widgets.
     * Eviction Policy: We utilize an allkeys-lru(last recently used) eviction policy. When redis reaches its maximum allocated memory capacity. it automatically evicts the stale telemetry states of sensors that haven't transmitted data recently, ensuring the cache stays bounded and healthy without manual intervention.
